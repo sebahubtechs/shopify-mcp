@@ -24,6 +24,9 @@ organization and use client credentials, never a static Admin access token.
    privately with `openssl rand -hex 32`. Keep its recovery copy in your secret
    manager; Cloudflare does not reveal a saved secret value afterward. Never put
    credentials in plain text vars, CLI arguments, Git, URLs, messages or logs.
+   An optional encrypted `MCP_BOT_API_KEY` accepts a separate bot credential
+   without replacing the required primary key. It uses the same Bearer header
+   and granted permissions. Remove that Secret to revoke the bot independently.
 4. Leave `SHOPIFY_MCP_READ_ONLY` unset/false for full granted access. Do not set
    `SHOPIFY_ACCESS_TOKEN`. Keep `NODE_ENV=production`, `REMOTE_MCP=true` and
    `SHOPIFY_MCP_WORKER=true` from the checked-in configuration.

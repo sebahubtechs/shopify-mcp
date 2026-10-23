@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 const key = "synthetic-worker-key";
+const botKey = "synthetic-worker-bot-key";
 async function freePort() {
   const s = createServer();
   s.listen(0, "127.0.0.1");
@@ -31,6 +32,7 @@ async function start(port, persist, readOnly = false) {
   ];
   for (const [k, v] of Object.entries({
     MCP_API_KEY: key,
+    MCP_BOT_API_KEY: botKey,
     SHOPIFY_CLIENT_ID: "synthetic-client-id",
     SHOPIFY_CLIENT_SECRET: "synthetic-client-secret",
     MYSHOPIFY_DOMAIN: "test-shop.myshopify.com",
@@ -69,14 +71,14 @@ async function start(port, persist, readOnly = false) {
     throw e;
   }
 }
-async function connect(url) {
+async function connect(url, apiKey = key) {
   const c = new Client(
     { name: "worker-acceptance", version: "1" },
     { capabilities: {} },
   );
   await c.connect(
     new StreamableHTTPClientTransport(new URL(url + "/mcp"), {
-      requestInit: { headers: { Authorization: "Bearer " + key } },
+      requestInit: { headers: { Authorization: "Bearer " + apiKey } },
     }),
   );
   return c;
@@ -103,6 +105,17 @@ test(
       );
       client = await connect(server.url);
       assert.equal((await client.listTools()).tools.length, 104);
+      const botClient = await connect(server.url, botKey);
+      try {
+        assert.equal((await botClient.listTools()).tools.length, 104);
+        assert.equal(
+          decode(await botClient.callTool({ name: "shop_info", arguments: {} }))
+            .shop.name,
+          "Test shop",
+        );
+      } finally {
+        await botClient.close();
+      }
       assert.equal(
         decode(await client.callTool({ name: "shop_info", arguments: {} })).shop
           .name,
@@ -177,7 +190,7 @@ test(
       await server.stop();
       server = null;
       server = await start(await freePort(), persist, true);
-      client = await connect(server.url);
+      client = await connect(server.url, botKey);
       const names = (await client.listTools()).tools.map((t) => t.name);
       assert.ok(!names.includes("cancel_order"));
       assert.ok(names.includes("graphql_admin"));

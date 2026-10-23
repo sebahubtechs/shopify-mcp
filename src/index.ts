@@ -73,6 +73,7 @@ const READ_ONLY_MODE = parseReadOnlyMode(
 const PORT = parseInt(process.env.PORT || "3000", 10);
 rememberSecret(SHOPIFY_CLIENT_SECRET);
 rememberSecret(process.env.MCP_API_KEY);
+rememberSecret(process.env.MCP_BOT_API_KEY);
 rememberSecret(argv.accessToken || process.env.SHOPIFY_ACCESS_TOKEN);
 installSafeLogging();
 
@@ -180,6 +181,10 @@ async function startServer(
         !bearerAuthorized(
           req.headers.authorization,
           process.env.MCP_API_KEY || "",
+        ) &&
+        !bearerAuthorized(
+          req.headers.authorization,
+          process.env.MCP_BOT_API_KEY || "",
         )
       ) {
         res.setHeader("WWW-Authenticate", "Bearer");

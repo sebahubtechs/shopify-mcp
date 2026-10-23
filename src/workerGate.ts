@@ -1,6 +1,7 @@
 import { bearerAuthorized } from "./adminSecurity.js";
 export type WorkerSecrets = {
   MCP_API_KEY?: string;
+  MCP_BOT_API_KEY?: string;
   SHOPIFY_CLIENT_ID?: string;
   SHOPIFY_CLIENT_SECRET?: string;
 };
@@ -39,6 +40,10 @@ export function workerRequestGate(
     !bearerAuthorized(
       request.headers.get("Authorization") || undefined,
       env.MCP_API_KEY,
+    ) &&
+    !bearerAuthorized(
+      request.headers.get("Authorization") || undefined,
+      env.MCP_BOT_API_KEY || "",
     )
   )
     return reply("Unauthorized", 401);

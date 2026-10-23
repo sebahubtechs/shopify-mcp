@@ -32,6 +32,8 @@ globalThis.fetch = async (input, init) => {
             process.env.SHOPIFY_CLIENT_SECRET +
             " Bearer " +
             process.env.MCP_API_KEY +
+            " " +
+            (process.env.MCP_BOT_API_KEY || "") +
             " test-token",
         },
       ],

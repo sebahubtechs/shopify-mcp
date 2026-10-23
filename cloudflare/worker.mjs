@@ -59,6 +59,7 @@ export class ShopifyMcpHost extends DurableObject {
 export default {
   async fetch(request, env) {
     rememberSecret(env.MCP_API_KEY);
+    rememberSecret(env.MCP_BOT_API_KEY);
     rememberSecret(env.SHOPIFY_CLIENT_SECRET);
     const rejected = workerRequestGate(request, env);
     if (rejected) return rejected;

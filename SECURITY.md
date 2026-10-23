@@ -1,12 +1,18 @@
 # Security
 
 Remote production requires a nonempty MCP_API_KEY and Shopify client credentials.
-Every /mcp method requires `Authorization: Bearer <MCP_API_KEY>`; keys in query
+Every /mcp method requires `Authorization: Bearer <key>`; keys in query
 strings are rejected. /health is public and returns only `{"status":"ok"}`.
 Do not set SHOPIFY_ACCESS_TOKEN for the production service. Shopify tokens are
 exchanged automatically, renewed five minutes before expiry and kept in memory.
 
-One shared key gives every holder the same granted store access, including
+MCP_API_KEY remains required. An optional encrypted MCP_BOT_API_KEY permits an
+independent bot credential without replacing the primary key. Both use the same
+Bearer header and have the same granted rights and read-only restrictions.
+Remove the bot Secret and restart to revoke it without changing primary clients;
+verify the removed key gets401. The server accepts no other key names or URL keys.
+
+A shared key gives every holder the same granted store access, including
 destructive tools and the generic GraphQL mutation capability. There is no
 per-person revocation or attribution with this shared connection. Store the key
 only in private deployment Secrets and assistants' secure secret stores.

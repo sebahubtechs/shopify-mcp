@@ -46,3 +46,13 @@ test("Worker fails closed before initializing Shopify without key or app credent
       ?.status,
   ).toBe(404);
 });
+
+test("Worker accepts a separate bot key while retaining the required primary key", () => {
+  const request = new Request("https://worker.example/mcp", {
+    headers: { Authorization: "Bearer synthetic-bot-key" },
+  });
+  const botEnv = { ...env, MCP_BOT_API_KEY: "synthetic-bot-key" };
+  expect(workerRequestGate(request, botEnv)).toBeNull();
+  const { MCP_API_KEY: _primary, ...withoutPrimary } = botEnv;
+  expect(workerRequestGate(request, withoutPrimary)?.status).toBe(503);
+});

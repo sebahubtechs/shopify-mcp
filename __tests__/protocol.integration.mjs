@@ -128,6 +128,7 @@ async function startRemote(
         ...(providerError ? { MOCK_SHOPIFY_ERROR: "true" } : {}),
         PORT: "0",
         MCP_API_KEY: key,
+        MCP_BOT_API_KEY: "synthetic-bot-key",
         MCP_ALLOWED_ORIGINS: "https://client.example",
         PUBLIC_BASE_URL: "https://public.example",
         MCP_ALLOWED_HOSTS: "custom.example",
@@ -519,7 +520,11 @@ test(
         await client.connect(
           new StreamableHTTPClientTransport(new URL(server.url + "/mcp"), {
             requestInit: {
-              headers: { Authorization: "Bearer synthetic-mcp-key" },
+              headers: {
+                Authorization: providerError
+                  ? "Bearer synthetic-mcp-key"
+                  : "Bearer synthetic-bot-key",
+              },
             },
           }),
         );
@@ -539,6 +544,7 @@ test(
         for (const secret of [
           "synthetic-client-secret",
           "synthetic-mcp-key",
+          "synthetic-bot-key",
           "test-token",
         ]) {
           assert.ok(!server.logs.includes(secret));
