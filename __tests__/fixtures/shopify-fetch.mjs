@@ -1,5 +1,7 @@
 // No live Shopify traffic is allowed in the connection tests.
 globalThis.fetch = async (input, init) => {
+  if (process.env.SHOPIFY_MCP_WORKER === "true" && init?.redirect === "error")
+    throw new TypeError("The edge runtime does not support redirect: error");
   if (
     String(input) === "https://test-shop.myshopify.com/admin/oauth/access_token"
   ) {

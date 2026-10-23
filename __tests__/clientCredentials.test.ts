@@ -12,6 +12,28 @@ describe("Shopify client-credentials authentication", () => {
   const clientId = "client-id";
   const clientSecret = "client-secret";
 
+  it("uses the edge-supported manual mode without following credential redirects", async () => {
+    const fetchImpl = jest.fn(async (_url, init) => {
+      if (init?.redirect !== "manual")
+        throw new TypeError("The edge runtime does not support redirect: error");
+      return {
+        ok: false,
+        status: 302,
+        headers: new Headers({ Location: "https://untrusted.example/token" }),
+        json: async () => ({}),
+      };
+    });
+    await expect(
+      acquireClientCredentialsToken(domain, clientId, clientSecret, {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow("HTTP 302");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      `https://${domain}/admin/oauth/access_token`,
+    );
+  });
+
   it("requests a 24-hour token using Shopify's client_credentials grant", async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,

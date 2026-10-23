@@ -95,7 +95,9 @@ export async function acquireClientCredentialsToken(
     `https://${domain}/admin/oauth/access_token`,
     {
       method: "POST",
-      redirect: "error",
+      // Workers supports manual redirects; a 3xx response is rejected below.
+      // Never forward the client secret to a redirected endpoint.
+      redirect: "manual",
       signal: AbortSignal.timeout(30000),
       headers: {
         "Content-Type": "application/json",
