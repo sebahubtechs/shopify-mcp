@@ -3,5 +3,7 @@
   "source": "Shopify Admin API introspection",
   "retrievedAt": "2026-10-23T18:21:55.478Z",
   "storeDataIncluded": false,
-  "sha256": "b454085688082bfd8b6886a822e71adc58494d5d5829ce67ce6197e2bda543d9"
+  "sha256": "37e7956ef88bebb44db1cdc4bfab8c224a0f4d0b55e99722a78e7b9ee7fc01a4",
+  "sourceSha256": "b454085688082bfd8b6886a822e71adc58494d5d5829ce67ce6197e2bda543d9",
+  "normalization": "Removed documentation descriptions only; all API types, fields, arguments, enum values and directives retained"
 }
