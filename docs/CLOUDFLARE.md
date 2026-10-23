@@ -35,7 +35,10 @@ organization and use client credentials, never a static Admin access token.
 The API key is checked at the edge before dispatch to a Durable Object. That
 object runs the same authenticated Express/MCP implementation, preserving legacy
 SSE sessions and the 104-tool remote catalog. Shopify tokens remain in memory,
-with the same automatic renewal. Object storage contains only temporary browser
+with the same automatic renewal. The Node HTTP listener starts once per isolate;
+reconstructed Durable Objects reuse it, avoiding a duplicate port binding after
+idle eviction. Upload metadata is restored for each reconstructed object. Object
+storage contains only temporary browser
 upload-session metadata; it contains no Shopify access token or client secret.
 Upload capabilities survive eviction and expire on access. An interrupted upload
 is marked failed with instructions to inspect Shopify Files before retrying.

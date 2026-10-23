@@ -131,6 +131,35 @@ test(
       );
       await client.close();
       client = null;
+      // An idle object can be reconstructed while the Node listener survives
+      // in the same isolate. This must not bind port 3000 a second time.
+      assert.equal(
+        (
+          await fetch(server.url + "/__test/reset-host", {
+            method: "POST",
+            headers: { Authorization: "Bearer " + key },
+          })
+        ).status,
+        202,
+      );
+      client = await connect(server.url);
+      assert.equal((await client.listTools()).tools.length, 104);
+      assert.equal(
+        decode(await client.callTool({ name: "shop_info", arguments: {} })).shop
+          .name,
+        "Test shop",
+      );
+      assert.equal(
+        decode(
+          await client.callTool({
+            name: "get-file-upload-session",
+            arguments: { sessionId: upload.sessionId },
+          }),
+        ).sessionState,
+        "PENDING",
+      );
+      await client.close();
+      client = null;
       await server.stop();
       server = null;
       server = await start(await freePort(), persist);

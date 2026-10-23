@@ -13,6 +13,22 @@ import {
 } from "../dist/files/uploadSessions.js";
 
 const nodeHandler = httpServerHandler({ port: 3000 });
+// The Node listener belongs to the isolate and can outlive a Durable Object.
+// Reuse it after object reconstruction instead of binding the same port again.
+let serverReady;
+function ensureServer() {
+  if (!serverReady)
+    serverReady = (async () => {
+      setBundledAdminSchema(schema, "2026-10");
+      const { main } = await import("../dist/index.js");
+      await main();
+    })().catch((error) => {
+      // A failed Shopify exchange must not poison future initialization.
+      serverReady = undefined;
+      throw error;
+    });
+  return serverReady;
+}
 
 // One object keeps the upstream SSE and upload-session state in one place.
 // Shopify tokens remain in memory and are never written to object storage.
@@ -29,9 +45,9 @@ export class ShopifyMcpHost extends DurableObject {
         );
       });
       cleanupExpiredUploadSessions();
-      setBundledAdminSchema(schema, "2026-10");
-      const { main } = await import("../dist/index.js");
-      await main();
+      const reusedListener = !!serverReady;
+      await ensureServer();
+      console.info("MCP host ready", { reusedListener });
     });
   }
   async fetch(request) {
