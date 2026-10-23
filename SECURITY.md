@@ -9,14 +9,16 @@ exchanged automatically, renewed five minutes before expiry and kept in memory.
 One shared key gives every holder the same granted store access, including
 destructive tools and the generic GraphQL mutation capability. There is no
 per-person revocation or attribution with this shared connection. Store the key
-only in Railway's private service Variables and assistants' secure secret stores.
+only in private deployment Secrets and assistants' secure secret stores.
 Never paste credentials into a URL, source, issue, email, log or chat.
 
 ## Rotate the shared key
 
-In Railway, open the service's Variables. Replace MCP_API_KEY with a newly
+In Cloudflare, open the Worker's Settings → Variables and Secrets. Replace the
+encrypted MCP_API_KEY Secret with a newly
 generated 32-byte random hex value (`openssl rand -hex 32`), entered privately.
-Redeploy/restart the service so the old value stops working, then update the
+Cloudflare cannot reveal saved secret values; retain private recovery in your
+secret manager. Redeploy/restart so the old value stops working, then update the
 team's secure assistant connections. Verify that the old key returns 401 and
 the replacement can list tools. Do not print either key during verification.
 If exposure is suspected, stop the service first while coordinating rotation.
@@ -25,7 +27,7 @@ If exposure is suspected, stop the service first while coordinating rotation.
 
 Uninstall the dedicated MCP app from the store's Apps settings. This revokes its
 store access and prevents further successful client-credentials use. Verify an
-authenticated read fails. Stopping/deleting the Railway service additionally
+authenticated read fails. Stopping/deleting the deployed service additionally
 cuts off the MCP endpoint. Rotating only the MCP key does not revoke Shopify app
 credentials; rotate those separately in the Dev Dashboard if compromised.
 
@@ -52,3 +54,8 @@ Browser upload capabilities expire and should be shared only with the intended
 uploader. Upload forms send only one bounded file; invalid sessions are rejected
 before multipart parsing, and temporary files are deleted on success or error.
 The local-host file upload tool is not available to remote clients.
+
+Cloudflare checks the key at the edge before the Node/MCP host. Its Durable
+Object persists temporary upload-session metadata across eviction; tokens and
+client secrets are not written to that storage. Browser uploads are limited
+to10MiB there. Secrets are never available to the bot through tools.

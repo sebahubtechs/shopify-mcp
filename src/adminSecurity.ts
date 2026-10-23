@@ -4,12 +4,12 @@ import { dirname, resolve } from "node:path";
 import {
   buildSchema,
   getOperationAST,
+  getVariableValues,
   Kind,
   parse,
   validate,
   type GraphQLSchema,
 } from "graphql";
-import { getVariableValues } from "graphql/execution/values.js";
 import { SHOPIFY_API_VERSION } from "./config.js";
 
 const secrets = new Set<string>();
@@ -86,6 +86,13 @@ export function bearerAuthorized(
 }
 
 let cachedSchema: GraphQLSchema | undefined;
+/** Workers imports the same reviewed schema as a bundled text module. */
+export function setBundledAdminSchema(sdl: string, version: string): void {
+  if (version !== SHOPIFY_API_VERSION)
+    throw Error("Bundled schema/API version mismatch");
+  cachedSchema = buildSchema(sdl);
+}
+
 export function adminSchema(): GraphQLSchema {
   if (cachedSchema) return cachedSchema;
   // The packaged executable is dist/index.js; cwd is a fallback for tests and

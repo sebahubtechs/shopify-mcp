@@ -25,3 +25,9 @@ Thumbs.db
 # Claude
 .claude/
 nanobanana-output/
+
+# Worker local state and private bindings
+.wrangler/
+.dev.vars*
+.env.*
+!.env.example

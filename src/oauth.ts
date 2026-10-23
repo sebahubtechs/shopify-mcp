@@ -4,7 +4,6 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
-import open from "open";
 import { rememberSecret } from "./adminSecurity.js";
 
 const CALLBACK_PORT = 3456;
@@ -415,6 +414,7 @@ export async function runOAuthFlow(
   console.log(`Store: ${domain}`);
   console.log(`Scopes: ${effectiveScopes}`);
   console.log("\nOpening browser for authorization...\n");
+  const { default: open } = await import("open");
 
   // Build auth URL and open browser
   const authUrl = buildAuthorizationUrl(

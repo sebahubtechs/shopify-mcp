@@ -29,20 +29,24 @@ as a verification test.
 - [x] Write failing auth/read-only/schema/redaction and new-tool behavior tests.
 - [x] Implement guarded access, new tools and schema checks; pin dependencies.
 - [x] Run baseline, new tests, protocol tests, schema audit and security review.
-- [ ] Build the Docker image; deploy with Dockerfile/railway.json when funded
-  Railway access and the owner's installed app credentials are available.
+- [ ] Build the Docker image; deploy with the selected Cloudflare runtime when existing
+  hosting access and the owner's installed app credentials are available.
 - [ ] Verify health, 401, authenticated tool list/shop and actual ShopifyQL;
   report any provider denial rather than substituting or inventing a pass.
 - [ ] Document all tools/scopes, secret rotation/revocation, deployment receipt,
   project handoff and recoverable source; do not print credentials.
 
 Deployment requires an installed merchant-organization app and an active funded
-Railway workspace. Shopify's plan and protected-data rules must be checked
+hosting workspace. Shopify's plan and protected-data rules must be checked
 against the actual app; no plan upgrade is performed by this server.
 
-Local verification: 157 unit tests, seven protocol tests, 140 static schema
+Local verification: 166 unit tests, seven protocol tests, 140 static schema
 checks and the production Docker image with a synthetic provider. Inspector
 lists the catalog with zero schema errors (free-form GraphQL input objects
 produce 18 portability warnings); shop_info succeeds. The ten eval scenarios
 are supplied in evals.xml. Destructive evals are not run on a live merchant.
 No independent model task-completion score or public deployment is claimed.
+
+Selected merchant host: existing Cloudflare Workers account. Railway was
+explicitly ruled out. Local workerd acceptance covers HTTP, schema variables,
+read-only mutation refusal and upload capability restoration after eviction.

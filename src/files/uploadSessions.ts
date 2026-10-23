@@ -6,11 +6,7 @@ import type {
 } from "./uploadUtils.js";
 
 export type UploadSessionState =
-  | "PENDING"
-  | "UPLOADING"
-  | "COMPLETE"
-  | "FAILED"
-  | "EXPIRED";
+  "PENDING" | "UPLOADING" | "COMPLETE" | "FAILED" | "EXPIRED";
 
 export interface UploadSessionRecord {
   id: string;
@@ -37,6 +33,31 @@ interface CreateUploadSessionInput {
 const SESSION_RETENTION_MS = 60 * 60 * 1000;
 const uploadSessions = new Map<string, UploadSessionRecord>();
 
+type SessionChange = (id: string, record: UploadSessionRecord | null) => void;
+let sessionChanged: SessionChange | undefined;
+const notify = (session: UploadSessionRecord) =>
+  sessionChanged?.(session.id, { ...session });
+
+/** Restore private capability metadata after a Worker object is evicted. */
+export function installUploadSessionPersistence(
+  records: UploadSessionRecord[],
+  changed: SessionChange,
+): void {
+  uploadSessions.clear();
+  sessionChanged = changed;
+  for (const record of records) {
+    const session = { ...record };
+    if (session.state === "UPLOADING") {
+      session.state = "FAILED";
+      session.error =
+        "Upload interrupted; check Shopify Files before retrying.";
+      session.updatedAt = Date.now();
+    }
+    uploadSessions.set(session.id, session);
+    notify(session);
+  }
+}
+
 function isExpired(session: UploadSessionRecord, now = Date.now()): boolean {
   return session.expiresAt <= now;
 }
@@ -48,6 +69,7 @@ function applyExpiry(
   if (isExpired(session, now) && session.state !== "EXPIRED") {
     session.state = "EXPIRED";
     session.updatedAt = now;
+    notify(session);
   }
 
   return session;
@@ -76,6 +98,7 @@ export function createUploadSession(
   };
 
   uploadSessions.set(sessionId, session);
+  notify(session);
   return session;
 }
 
@@ -100,6 +123,7 @@ export function updateUploadSession(
   }
 
   Object.assign(session, patch, { updatedAt: Date.now() });
+  notify(session);
   return session;
 }
 
@@ -107,12 +131,17 @@ export function cleanupExpiredUploadSessions(now = Date.now()): void {
   for (const [sessionId, session] of uploadSessions.entries()) {
     applyExpiry(session, now);
 
-    if (session.state === "EXPIRED" && now - session.expiresAt > SESSION_RETENTION_MS) {
+    if (
+      session.state === "EXPIRED" &&
+      now - session.expiresAt > SESSION_RETENTION_MS
+    ) {
       uploadSessions.delete(sessionId);
+      sessionChanged?.(sessionId, null);
     }
   }
 }
 
 export function resetUploadSessionsForTests(): void {
   uploadSessions.clear();
+  sessionChanged = undefined;
 }

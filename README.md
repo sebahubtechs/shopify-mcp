@@ -205,7 +205,19 @@ Config paths:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
-### Remote MCP (Railway)
+### Remote MCP on Cloudflare
+
+The merchant's selected host is Cloudflare Workers. Follow the complete
+[Cloudflare deployment and Grok connection guide](docs/CLOUDFLARE.md), including
+private secrets, an isolated account, public configuration and live acceptance.
+Use the existing bot/team; no new AI agent is created. The complete
+[104-tool catalog](docs/TOOLS.md) lists the remote interface.
+
+### Standalone Node/container hosting (upstream alternative)
+
+The following upstream container route remains available to other deployments;
+the merchant's Cloudflare deployment does not use Railway.
+
 
 This Tech fork adds Admin API 2026-10 tools, schema validation and mandatory
 remote authentication. The complete [tool catalog](docs/TOOLS.md) lists every

@@ -20,7 +20,10 @@
     "test:connections": "npm run build && node --test __tests__/protocol.integration.mjs",
     "schema:check": "npm run build && node scripts/check-schema.mjs",
     "tools:catalog": "npm run build && node scripts/tool-catalog.mjs",
-    "verify:remote": "node scripts/verify-remote.mjs"
+    "verify:remote": "node scripts/verify-remote.mjs",
+    "test:worker": "npm run build && node --test __tests__/worker.integration.mjs",
+    "deploy:cloudflare": "wrangler deploy",
+    "dev:worker": "wrangler dev"
   },
   "keywords": [
     "shopify",
@@ -61,7 +64,8 @@
     "rimraf": "5.0.10",
     "ts-jest": "29.3.1",
     "ts-node": "10.9.2",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "wrangler": "4.152.0"
   },
   "files": [
     "dist",

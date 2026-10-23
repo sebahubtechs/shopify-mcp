@@ -203,10 +203,15 @@ async function startServer(
       },
     });
 
-    const cleanupInterval = setInterval(() => {
-      cleanupExpiredUploadSessions();
-    }, 60_000);
-    cleanupInterval.unref();
+    // Workers evicts idle objects; expire sessions on access there instead of
+    // keeping the object alive with a background timer.
+    const cleanupInterval =
+      process.env.SHOPIFY_MCP_WORKER === "true"
+        ? null
+        : setInterval(() => {
+            cleanupExpiredUploadSessions();
+          }, 60_000);
+    cleanupInterval?.unref?.();
 
     // Validate the actual Host header even when native clients omit Origin.
     // Additional proxy/domain hostnames must be configured explicitly.
@@ -765,7 +770,7 @@ async function startServer(
     );
     const shutdown = () => {
       httpServer.close();
-      clearInterval(cleanupInterval);
+      if (cleanupInterval) clearInterval(cleanupInterval);
       void Promise.allSettled([
         httpHandler.close(),
         ...Array.from(sessions.values(), ({ server }) => server.close()),
@@ -784,7 +789,7 @@ async function startServer(
 /**
  * Main entry point
  */
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   if (
     REMOTE_MODE &&
     (!process.env.MCP_API_KEY?.trim() ||
@@ -895,8 +900,9 @@ async function main(): Promise<void> {
   await startServer(getAccessToken, MYSHOPIFY_DOMAIN);
 }
 
-// Run main
-main().catch((error) => {
-  console.error("Failed to start Shopify MCP Server:", error);
-  process.exit(1);
-});
+// The Worker invokes main inside its owned request context, never at import.
+if (process.env.SHOPIFY_MCP_WORKER !== "true")
+  main().catch((error) => {
+    console.error("Failed to start Shopify MCP Server:", error);
+    process.exit(1);
+  });
