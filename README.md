@@ -12,7 +12,10 @@
 
 A Model Context Protocol (MCP) server that connects agents to the Shopify Admin GraphQL API. Use it to browse, edit, and clean up store data via a curated set of tools.
 
-**npm:** `@benwmerritt/shopify-mcp`  
+This is the `sebahubtechs` fork. Deploy this checkout for the extensions below;
+the upstream npm release does not include these unpublished fork changes.
+
+**Upstream npm:** `@benwmerritt/shopify-mcp`
 **binary:** `shopify-mcp`
 
 This project started from Ge Li's [shopify-mcp](https://github.com/GeLi2001/shopify-mcp). The unscoped `shopify-mcp` package on npm is theirs and does not include the changes in this repository.
@@ -202,87 +205,75 @@ Config paths:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
-### Remote MCP (Railway, etc.)
+### Remote MCP (Railway)
 
-By default this server runs as a local stdio MCP. Passing `--remote` (or setting
-`REMOTE_MCP=true`) switches it to HTTP/SSE mode so it can be deployed as a remote
-MCP server for Claude.ai or other remote clients. This repo ships a `Dockerfile`
-and `railway.json` so Railway builds and starts it in remote mode out of the box.
+This Tech fork adds Admin API 2026-10 tools, schema validation and mandatory
+remote authentication. The complete [tool catalog](docs/TOOLS.md) lists every
+remote tool. Read [SECURITY.md](SECURITY.md) before sharing the connection.
 
-**1. Get a token locally (one-time):**
-```bash
-npx @benwmerritt/shopify-mcp --oauth --domain=your-store.myshopify.com --clientId=xxx --clientSecret=yyy
-# Token saved to ~/.shopify-mcp/tokens.json
-```
+1. From your store admin, open Settings → Apps → Develop apps → Build apps in
+   Dev Dashboard. Create the app in the **store's own organization**, configure
+   its scopes, release a version and install it on that store. An app in a
+   different organization can fail with `shop_not_permitted`.
+2. Create a Railway service from this repository. Railway uses `Dockerfile` and
+   `railway.json`. Privately set these service Variables:
 
-**2. Deploy to Railway:**
-- Create a project from this repo. Railway reads `railway.json` and builds the
-  `Dockerfile`, which starts the server with `--remote`.
-- Set the service environment variables (Railway injects `PORT` automatically):
+   ```text
+   MYSHOPIFY_DOMAIN=your-store.myshopify.com
+   SHOPIFY_CLIENT_ID=<installed merchant app client ID>
+   SHOPIFY_CLIENT_SECRET=<installed merchant app client secret>
+   MCP_API_KEY=<private output of openssl rand -hex 32>
+   ```
 
-```bash
-SHOPIFY_ACCESS_TOKEN=shpat_xxx           # from tokens.json (or use the OAuth vars)
-MYSHOPIFY_DOMAIN=your-store.myshopify.com
-MCP_API_KEY=choose-a-long-random-string  # required to authenticate remote clients
-# REMOTE_MCP=true is already implied by the Dockerfile's --remote flag
-# PORT is injected by Railway (defaults to 3000 when run locally)
-```
+   Leave `SHOPIFY_MCP_READ_ONLY` unset for full granted access. **Do not set
+   `SHOPIFY_ACCESS_TOKEN`.** Production remote startup refuses static tokens.
+   Railway supplies `PORT`; the image sets `NODE_ENV=production`. Client
+   credentials are exchanged for a 24-hour Shopify token, refreshed five
+   minutes before expiry, with concurrent refreshes coalesced. Remote Shopify
+   tokens stay in process memory and are not saved to disk.
+3. Generate a Railway public domain. Use `https://<domain>/mcp` in your assistant,
+   with `Authorization: Bearer <MCP_API_KEY>` supplied through its secure secret
+   prompt. The key stays in Railway Variables and the assistant's secret store.
+   This shared-key service does not implement an MCP OAuth authorization server.
+4. `GET /health` is public and returns only `{"status":"ok"}`. Every `/mcp` and
+   `/messages` request, including OPTIONS, requires the bearer header. Missing,
+   wrong or URL-only keys return 401. An authenticated request also passes exact
+   Host and Origin checks. A browser requiring an unauthenticated CORS preflight
+   cannot connect directly; use a server-side assistant connector.
+5. Run `MCP_URL=https://<domain>/mcp EXPECTED_SHOP_NAME=Skunkfly npm run verify:remote`
+   with the key injected privately into the process environment. The read-only
+   acceptance script checks health, unauthenticated 401, tools, shop, scopes and
+   ShopifyQL. It reports a real ShopifyQL denial as a failure, never a fake pass.
 
-**3. Connect:**
-- Health check: `GET /health`
-- Streamable HTTP: `/mcp`, using POST for requests, including MCP 2026-07-28.
-- Existing SSE clients: `GET /mcp?apiKey=<MCP_API_KEY>`.
-- Existing SSE messages: `POST /messages?apiKey=<MCP_API_KEY>`.
+Shopify permissions remain authoritative. `read_reports` and Level2 customer-data
+access are required by `shopifyqlQuery`; Basic-plan restrictions can prevent that
+acceptance check. Customer names, email and addresses can be unavailable even
+when customer/order scopes are configured. Do not upgrade a plan implicitly.
+Merchant-organization apps do not need separate `read_all_orders` approval;
+Partner-organization apps request it under the app's API access requests. Pair
+that optional scope with `read_orders`/`write_orders` and verify actual grants.
+See Shopify's [scope documentation](https://shopify.dev/docs/api/usage/access-scopes)
+and [custom Level2 app plan limits](https://help.shopify.com/en/manual/apps/about-apps#custom-level-2-pii-apps).
 
-Send `Authorization: Bearer <MCP_API_KEY>` with Streamable HTTP requests.
-The existing `apiKey` query parameter also works on both transports. When
-`MCP_API_KEY` is configured, missing or invalid credentials receive `401` on
-all MCP routes except allowed `OPTIONS` preflights, which do not require credentials.
-An explicit Bearer header takes precedence over the query key.
-Without `MCP_API_KEY`, development mode binds only to `127.0.0.1`.
-External deployments, including containers that publish a port, must configure a
-key to listen on all interfaces. The health endpoint remains unauthenticated.
-Use HTTPS and configure a key for a public deployment. This shared-key scheme
-is not an MCP OAuth authorization server.
+`MCP_ALLOWED_HOSTS` accepts additional exact hostnames (no scheme or port), and
+`MCP_ALLOWED_ORIGINS` accepts exact browser origins. Defaults cover the resolved
+public app hostname and local hosts. `X-Forwarded-Host` is not trusted. Public
+URL resolution uses `PUBLIC_BASE_URL`, `APP_URL`, or Railway's public-domain
+variables. Legacy SSE needs the same Authorization header; URL keys are removed.
+Uploads use expiring, unguessable session URLs generated by an authenticated MCP
+write tool; treat those URLs as temporary capabilities. Invalid sessions are
+rejected before file reception, and received files are removed after processing.
 
-MCP routes validate the actual `Host` header before Origin and authentication,
-including requests without an `Origin` header and `OPTIONS` preflights. Allowed
-hostnames are the configured public app hostname, `localhost`, `127.0.0.1`, and
-`[::1]`, with an optional port. Add custom proxy or domain hostnames through
-`MCP_ALLOWED_HOSTS`, comma-separated, such as `mcp.example.com,internal-proxy.example.com`.
-Use hostnames without schemes or ports; matches are exact and case-insensitive.
-`X-Forwarded-Host` is not trusted. Other or missing Host headers receive `403`.
-Native clients without an `Origin` header work when their Host is allowed. Browser requests to
-MCP routes must use the configured public app origin, the local server origin,
-or an exact origin listed in `MCP_ALLOWED_ORIGINS`, comma-separated, such as
-`https://client.example,https://another-client.example`. Other origins receive
-`403`, including preflight requests. Public app URL resolution continues to use
-`PUBLIC_BASE_URL`, `APP_URL`, or the Railway public URL/domain variables.
-The upload pages keep their existing URLs and short-lived upload-session checks.
+For a local container, supply the same client credentials and key privately via
+your container secret mechanism, bind only the required port, and check /health.
+The production image runs as an unprivileged Node 24 user. Local stdio retains
+upstream OAuth/static-token compatibility; production remote does not use it.
 
-**Test the container locally before deploying:**
-```bash
-docker build -t shopify-mcp .
-docker run -p 3000:3000 \
-  -e MYSHOPIFY_DOMAIN=your-store.myshopify.com \
-  -e SHOPIFY_ACCESS_TOKEN=shpat_xxx \
-  -e MCP_API_KEY=test \
-  shopify-mcp
-# then in another shell: curl localhost:3000/health
-```
-
-### Environment variables (optional)
-
-```bash
-SHOPIFY_ACCESS_TOKEN=your_access_token
-MYSHOPIFY_DOMAIN=your-store.myshopify.com
-# Optional OAuth values:
-# SHOPIFY_CLIENT_ID=your_client_id
-# SHOPIFY_CLIENT_SECRET=your_client_secret
-# SHOPIFY_SCOPES=comma,separated,scopes
-# Hide every mutating or unreviewed tool (also available as `--read-only`):
-# SHOPIFY_MCP_READ_ONLY=true
-```
+GraphQL cost limits and throttling are enforced by Shopify. Rate-limit failures
+are returned as sanitized tool errors. The server does not automatically retry
+mutations; inspect the order/job result before retrying to avoid duplicate writes.
+Paginated reads expose cursors; continue only as needed. Bulk export documents
+are validated separately from their enclosing mutation.
 
 ## Protocol compatibility and upgrade notes
 
@@ -292,13 +283,13 @@ and older initialization-based Streamable HTTP clients. Modern requests use
 `server/discover` and per-request metadata rather than an initialization session.
 
 Existing stdio commands, Shopify credentials, token renewal, OAuth setup,
-read-only flags, tool names, and legacy SSE connection URLs remain available.
+read-only flags, tool names, and legacy SSE paths remain available with mandatory bearer headers.
 The same tool registrations and fail-closed allowlist serve every transport.
 
 Compatibility limits:
 
 - Node 18 is no longer supported by SDK v2. Upgrade Node to 20+ before updating
-  this server, or retain the previous release. The Docker image already uses Node 20.
+  this server, or retain the previous release. The Docker image uses Node 24.
 - Legacy SSE uses the SDK's frozen `server-legacy` compatibility package.
   New integrations should use Streamable HTTP; the SSE bridge receives no new features.
 - Legacy Streamable HTTP on POST `/mcp` is stateless, with no session ID or replay.
@@ -311,7 +302,7 @@ Compatibility limits:
 
 Run `npm test -- --runInBand` for the application suite and
 `npm run test:connections` for built-server connection and security tests.
-Connection tests use SDK v1.17.1 and v2.0.0, explicitly pin modern clients to
+Connection tests use pinned SDK v1.32.2 and v2.4.0, explicitly pin modern clients to
 2026-07-28, compare tool catalogs, and mock Shopify calls without store access.
 See [the research notes](docs/mcp-sdk-v2-research.md) for official sources and migration details.
 

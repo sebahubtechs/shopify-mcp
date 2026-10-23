@@ -5,3 +5,10 @@ dist
 *.log
 npm-debug.log*
 .DS_Store
+.env.*
+!.env.example
+*.pem
+*.key
+tokens.json
+coverage
+.gsd

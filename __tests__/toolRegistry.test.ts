@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { Client } from "@modelcontextprotocol/client";
 import { z } from "zod";
+import {adminTools} from "../src/tools/adminTools.js";
 
 import {
   READ_ONLY_TOOL_NAMES,
@@ -22,7 +23,7 @@ import {
 const toolsDir = join(process.cwd(), "src", "tools");
 
 // Files under src/tools that are helpers rather than tool modules.
-const NON_TOOL_FILES = new Set(["metaobjectDefinitionUtils.ts"]);
+const NON_TOOL_FILES = new Set(["metaobjectDefinitionUtils.ts", "adminTools.ts"]);
 
 function kebabCase(fileBase: string): string {
   return fileBase.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
@@ -46,6 +47,7 @@ describe("tool registry", () => {
     const expected = readdirSync(toolsDir)
       .filter((file) => file.endsWith(".ts") && !NON_TOOL_FILES.has(file))
       .map((file) => kebabCase(file.replace(/\.ts$/, "")))
+      .concat(adminTools.map(tool=>tool.name))
       .sort();
 
     expect([...names].sort()).toEqual(expected);

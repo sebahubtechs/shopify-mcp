@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import crypto from "crypto";
 import open from "open";
+import { rememberSecret } from "./adminSecurity.js";
 
 const CALLBACK_PORT = 3456;
 const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}/callback`;
@@ -56,7 +57,7 @@ const DEFAULT_SCOPES = [
   "write_metaobject_definitions",
   // Reports
   "read_reports",
-  "write_reports"
+  "write_reports",
 ].join(",");
 
 export interface TokenData {
@@ -95,6 +96,8 @@ export async function acquireClientCredentialsToken(
     `https://${domain}/admin/oauth/access_token`,
     {
       method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(30000),
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
@@ -108,9 +111,17 @@ export async function acquireClientCredentialsToken(
   );
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    const reason =
+      body.error === "shop_not_permitted"
+        ? "shop_not_permitted: create/install the app in the store merchant organization"
+        : body.error === "invalid_client"
+          ? "invalid_client: check the private app credentials"
+          : "check app installation, organization and credentials";
     throw new Error(
-      `Failed to acquire client-credentials token: ${response.status} ${errorText}`,
+      `Failed to acquire client-credentials token: HTTP ${response.status}; ${reason}`,
     );
   }
 
@@ -120,7 +131,9 @@ export async function acquireClientCredentialsToken(
     expires_in?: number;
   };
   if (!data.access_token || !data.expires_in || data.expires_in <= 0) {
-    throw new Error("Shopify returned an invalid client-credentials token response");
+    throw new Error(
+      "Shopify returned an invalid client-credentials token response",
+    );
   }
 
   return {
@@ -193,7 +206,9 @@ export function createAuthenticatedFetch(
 ): FetchLike {
   return async (input, init = {}) => {
     const headers = new Headers(init.headers);
-    headers.set("X-Shopify-Access-Token", await getAccessToken());
+    const token = await getAccessToken();
+    rememberSecret(token);
+    headers.set("X-Shopify-Access-Token", token);
     return fetchImpl(input, { ...init, headers });
   };
 }
@@ -205,13 +220,13 @@ function buildAuthorizationUrl(
   domain: string,
   clientId: string,
   scopes: string,
-  state: string
+  state: string,
 ): string {
   const params = new URLSearchParams({
     client_id: clientId,
     scope: scopes,
     redirect_uri: REDIRECT_URI,
-    state: state
+    state: state,
   });
   return `https://${domain}/admin/oauth/authorize?${params.toString()}`;
 }
@@ -220,7 +235,7 @@ function buildAuthorizationUrl(
  * Start a temporary HTTP server to capture the OAuth callback
  */
 function startCallbackServer(
-  expectedState: string
+  expectedState: string,
 ): Promise<{ code: string; shop: string }> {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
@@ -287,10 +302,13 @@ function startCallbackServer(
     });
 
     // Timeout after 5 minutes
-    setTimeout(() => {
-      server.close();
-      reject(new Error("Authorization timed out after 5 minutes"));
-    }, 5 * 60 * 1000);
+    setTimeout(
+      () => {
+        server.close();
+        reject(new Error("Authorization timed out after 5 minutes"));
+      },
+      5 * 60 * 1000,
+    );
   });
 }
 
@@ -301,37 +319,37 @@ async function exchangeCodeForToken(
   domain: string,
   clientId: string,
   clientSecret: string,
-  code: string
+  code: string,
 ): Promise<TokenData> {
-  const response = await fetch(
-    `https://${domain}/admin/oauth/access_token`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code: code
-      })
-    }
-  );
+  const response = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code: code,
+    }),
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `Failed to exchange code for token: ${response.status} ${errorText}`
+      `Failed to exchange code for token: ${response.status} ${errorText}`,
     );
   }
 
-  const data = (await response.json()) as { access_token: string; scope: string };
+  const data = (await response.json()) as {
+    access_token: string;
+    scope: string;
+  };
 
   return {
     access_token: data.access_token,
     scope: data.scope,
-    obtained_at: new Date().toISOString()
+    obtained_at: new Date().toISOString(),
   };
 }
 
@@ -359,7 +377,9 @@ function saveToken(domain: string, tokenData: TokenData): void {
   tokens[domain] = tokenData;
 
   // Write back with restricted permissions
-  fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+  fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2), {
+    mode: 0o600,
+  });
   console.log(`Token saved for ${domain}`);
 }
 
@@ -386,7 +406,7 @@ export async function runOAuthFlow(
   domain: string,
   clientId: string,
   clientSecret: string,
-  scopes?: string
+  scopes?: string,
 ): Promise<TokenData> {
   const effectiveScopes = scopes || DEFAULT_SCOPES;
   const state = crypto.randomBytes(16).toString("hex");
@@ -397,7 +417,12 @@ export async function runOAuthFlow(
   console.log("\nOpening browser for authorization...\n");
 
   // Build auth URL and open browser
-  const authUrl = buildAuthorizationUrl(domain, clientId, effectiveScopes, state);
+  const authUrl = buildAuthorizationUrl(
+    domain,
+    clientId,
+    effectiveScopes,
+    state,
+  );
 
   // Start callback server before opening browser
   const callbackPromise = startCallbackServer(state);
@@ -414,7 +439,12 @@ export async function runOAuthFlow(
 
   // Exchange code for token
   console.log("Exchanging code for access token...");
-  const tokenData = await exchangeCodeForToken(domain, clientId, clientSecret, code);
+  const tokenData = await exchangeCodeForToken(
+    domain,
+    clientId,
+    clientSecret,
+    code,
+  );
 
   // Save token
   saveToken(domain, tokenData);

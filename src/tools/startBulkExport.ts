@@ -1,15 +1,27 @@
 import type { GraphQLClient } from "graphql-request";
 import { gql } from "graphql-request";
 import { z } from "zod";
+import { validateAdminRequest } from "../adminSecurity.js";
 
 // Input schema for startBulkExport
 const StartBulkExportInputSchema = z.object({
-  type: z.enum(["products", "orders", "customers", "inventory", "custom"]).describe("Type of export to run"),
-  query: z.string().optional().describe("Filter query (e.g., 'status:active' for products)"),
+  type: z
+    .enum(["products", "orders", "customers", "inventory", "custom"])
+    .describe("Type of export to run"),
+  query: z
+    .string()
+    .optional()
+    .describe("Filter query (e.g., 'status:active' for products)"),
   dateFrom: z.string().optional().describe("Start date for orders (ISO 8601)"),
   dateTo: z.string().optional().describe("End date for orders (ISO 8601)"),
-  customQuery: z.string().optional().describe("Custom GraphQL query (required if type='custom')"),
-  includeMetafields: z.boolean().default(false).describe("Include metafields in export")
+  customQuery: z
+    .string()
+    .optional()
+    .describe("Custom GraphQL query (required if type='custom')"),
+  includeMetafields: z
+    .boolean()
+    .default(false)
+    .describe("Include metafields in export"),
 });
 
 type StartBulkExportInput = z.infer<typeof StartBulkExportInputSchema>;
@@ -18,12 +30,15 @@ type StartBulkExportInput = z.infer<typeof StartBulkExportInputSchema>;
 let shopifyClient: GraphQLClient;
 
 // Preset query templates
-function buildProductsQuery(filter?: string, includeMetafields?: boolean): string {
+function buildProductsQuery(
+  filter?: string,
+  includeMetafields?: boolean,
+): string {
   const metafieldsFragment = includeMetafields
     ? `metafields(first: 20) { edges { node { namespace key value type }}}`
     : "";
 
-  const queryArg = filter ? `(query: "${filter}")` : "";
+  const queryArg = filter ? `(query: ${JSON.stringify(filter)})` : "";
 
   return `{
     products${queryArg} {
@@ -66,13 +81,20 @@ function buildProductsQuery(filter?: string, includeMetafields?: boolean): strin
   }`;
 }
 
-function buildOrdersQuery(dateFrom?: string, dateTo?: string, filter?: string): string {
+function buildOrdersQuery(
+  dateFrom?: string,
+  dateTo?: string,
+  filter?: string,
+): string {
   const conditions: string[] = [];
   if (dateFrom) conditions.push(`created_at:>=${dateFrom}`);
   if (dateTo) conditions.push(`created_at:<=${dateTo}`);
   if (filter) conditions.push(filter);
 
-  const queryArg = conditions.length > 0 ? `(query: "${conditions.join(" AND ")}")` : "";
+  const queryArg =
+    conditions.length > 0
+      ? `(query: ${JSON.stringify(conditions.join(" AND "))})`
+      : "";
 
   return `{
     orders${queryArg} {
@@ -124,7 +146,7 @@ function buildOrdersQuery(dateFrom?: string, dateTo?: string, filter?: string): 
 }
 
 function buildCustomersQuery(filter?: string): string {
-  const queryArg = filter ? `(query: "${filter}")` : "";
+  const queryArg = filter ? `(query: ${JSON.stringify(filter)})` : "";
 
   return `{
     customers${queryArg} {
@@ -137,8 +159,8 @@ function buildCustomersQuery(filter?: string): string {
           phone
           createdAt
           updatedAt
-          ordersCount
-          totalSpentV2 {
+          numberOfOrders
+          amountSpent {
             amount
             currencyCode
           }
@@ -168,7 +190,7 @@ function buildInventoryQuery(): string {
             edges {
               node {
                 id
-                available
+                quantities(names: ["available"]) { name quantity }
                 location {
                   id
                   name
@@ -192,7 +214,8 @@ function buildInventoryQuery(): string {
 
 const startBulkExport = {
   name: "start-bulk-export",
-  description: "Start an async bulk export operation. Returns immediately with operation ID. Use get-bulk-operation-status to check progress.",
+  description:
+    "Start an async bulk export operation. Returns immediately with operation ID. Use get-bulk-operation-status to check progress.",
   schema: StartBulkExportInputSchema,
 
   initialize(client: GraphQLClient) {
@@ -209,7 +232,11 @@ const startBulkExport = {
           bulkQuery = buildProductsQuery(input.query, input.includeMetafields);
           break;
         case "orders":
-          bulkQuery = buildOrdersQuery(input.dateFrom, input.dateTo, input.query);
+          bulkQuery = buildOrdersQuery(
+            input.dateFrom,
+            input.dateTo,
+            input.query,
+          );
           break;
         case "customers":
           bulkQuery = buildCustomersQuery(input.query);
@@ -226,6 +253,9 @@ const startBulkExport = {
         default:
           throw new Error(`Unknown export type: ${input.type}`);
       }
+
+      // The query is nested in a String argument; validate its schema separately.
+      validateAdminRequest(bulkQuery, {}, undefined, true);
 
       // Run the bulk operation
       const mutation = gql`
@@ -244,7 +274,9 @@ const startBulkExport = {
         }
       `;
 
-      const data = (await shopifyClient.request(mutation, { query: bulkQuery })) as {
+      const data = (await shopifyClient.request(mutation, {
+        query: bulkQuery,
+      })) as {
         bulkOperationRunQuery: {
           bulkOperation: {
             id: string;
@@ -262,7 +294,7 @@ const startBulkExport = {
         throw new Error(
           `Failed to start bulk export: ${data.bulkOperationRunQuery.userErrors
             .map((e) => e.message)
-            .join(", ")}`
+            .join(", ")}`,
         );
       }
 
@@ -278,17 +310,17 @@ const startBulkExport = {
         status: operation.status,
         createdAt: operation.createdAt,
         exportType: input.type,
-        message: `Bulk export started. Use get-bulk-operation-status to check progress, then get-bulk-operation-results when complete.`
+        message: `Bulk export started. Use get-bulk-operation-status to check progress, then get-bulk-operation-results when complete.`,
       };
     } catch (error) {
       console.error("Error starting bulk export:", error);
       throw new Error(
         `Failed to start bulk export: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
     }
-  }
+  },
 };
 
 export { startBulkExport };

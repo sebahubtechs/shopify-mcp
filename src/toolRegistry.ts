@@ -1,5 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { adminTools } from "./tools/adminTools.js";
+import { safeErrorMessage } from "./adminSecurity.js";
 
 import { products } from "./tools/products.js";
 import { orders } from "./tools/orders.js";
@@ -80,6 +82,7 @@ export type ToolModule = {
 
 /** Tools initialised with the Shopify GraphQL client and exposed in every mode. */
 export const shopifyClientTools = [
+  ...adminTools,
   products,
   getCustomers,
   orders,
@@ -205,10 +208,22 @@ export function registerTool(server: McpServer, tool: ToolModule): void {
       inputSchema: toolInputSchema(tool),
     },
     async (args) => {
-      const result = await tool.execute(args);
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
-      };
+      try {
+        const result = await tool.execute(args);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({ error: safeErrorMessage(error) }),
+            },
+          ],
+        };
+      }
     },
   );
 }

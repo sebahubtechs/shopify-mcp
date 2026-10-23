@@ -29,7 +29,7 @@ function normalizeBaseUrl(value: string | undefined): string | null {
 }
 
 export const SHOPIFY_API_VERSION =
-  process.env.SHOPIFY_API_VERSION?.trim() || "2026-01";
+  process.env.SHOPIFY_API_VERSION?.trim() || "2026-10";
 
 export const SHOPIFY_FILE_UPLOAD_MAX_BYTES = parsePositiveInt(
   process.env.SHOPIFY_FILE_UPLOAD_MAX_BYTES,
